@@ -3,10 +3,10 @@ name: Sync latest _workers.js
 on:
   schedule:
     - cron: '0 3 * * *'  # 每天运行
-  workflow_dispatch:     # 支持手动触发
+  workflow_dispatch:     # 手动触发也可以
 
 permissions:
-  contents: write  # 允许推送变更
+  contents: write
 
 jobs:
   sync-latest-worker:
@@ -26,14 +26,32 @@ jobs:
           echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
           echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
 
-      - name: Download and rename to _workers.js
+      - name: Compare with local version
+        id: check_version
+        run: |
+          if [ -f version.txt ]; then
+            LOCAL_VERSION=$(cat version.txt)
+          else
+            LOCAL_VERSION="none"
+          fi
+          echo "Local version: $LOCAL_VERSION"
+          echo "Latest version: $VERSION_TAG"
+          if [ "$LOCAL_VERSION" = "$VERSION_TAG" ]; then
+            echo "Up to date. Skipping update."
+            echo "skip_update=true" >> $GITHUB_OUTPUT
+          else
+            echo "Update needed."
+            echo "skip_update=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download and update files
+        if: steps.check_version.outputs.skip_update == 'false'
         run: |
           curl -L -o _workers.js "$DOWNLOAD_URL"
+          echo "$VERSION_TAG" > version.txt
 
-      - name: Write version.txt
-        run: echo "$VERSION_TAG" > version.txt
-
-      - name: Commit and push if changed
+      - name: Commit and push changes
+        if: steps.check_version.outputs.skip_update == 'false'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
