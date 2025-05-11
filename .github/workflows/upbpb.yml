@@ -53,7 +53,7 @@ jobs:
           fi
 
           log "最新版本: $TAG_NAME"
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV  # 供后续步骤使用
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
           # 是否需要更新
           if [ "$LOCAL_VERSION" = "$TAG_NAME" ] && [ "$FORCE_UPDATE" != "true" ]; then
@@ -62,16 +62,26 @@ jobs:
             exit 0
           fi
 
-          # 下载并更新
+          # 下载和解压处理
           log "下载 $TARGET_FILE..."
           wget -q -O "$TARGET_FILE" "$DOWNLOAD_URL"
 
-          log "解压..."
-          unzip -o "$TARGET_FILE" >/dev/null
+          log "列出压缩包内容:"
+          unzip -l "$TARGET_FILE"
+
+          log "查找 .js 文件..."
+          JS_FILE=$(unzip -Z1 "$TARGET_FILE" | grep '\.js$' | head -n 1)
+          if [ -z "$JS_FILE" ]; then
+            log "ERROR: 压缩包中未找到 .js 文件"
+            exit 1
+          fi
+
+          log "解压 $JS_FILE..."
+          unzip -o "$TARGET_FILE" "$JS_FILE" >/dev/null
           rm "$TARGET_FILE"
 
           log "重命名为 _workers.js"
-          mv worker.js _workers.js
+          mv "$JS_FILE" _workers.js
 
           echo "$TAG_NAME" > version.txt
           log "更新完成，新版本: $TAG_NAME"
