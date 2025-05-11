@@ -1,12 +1,12 @@
-name: Sync latest worker.js
+name: Sync latest _workers.js
 
 on:
   schedule:
-    - cron: '0 3 * * *'
-  workflow_dispatch:
+    - cron: '0 3 * * *'  # 每天运行
+  workflow_dispatch:     # 支持手动触发
 
 permissions:
-  contents: write  # 允许 Actions 推送更改
+  contents: write  # 允许推送变更
 
 jobs:
   sync-latest-worker:
@@ -26,17 +26,20 @@ jobs:
           echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
           echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
 
-      - name: Download latest worker.js
+      - name: Download and rename to _workers.js
         run: |
-          curl -L -o worker.js "$DOWNLOAD_URL"
+          curl -L -o _workers.js "$DOWNLOAD_URL"
+
+      - name: Write version.txt
+        run: echo "$VERSION_TAG" > version.txt
 
       - name: Commit and push if changed
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           if [[ `git status --porcelain` ]]; then
-            git add worker.js
-            git commit -m "Update worker.js from BPB-Worker-Panel $VERSION_TAG"
+            git add _workers.js version.txt
+            git commit -m "Update _workers.js to $VERSION_TAG"
             git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:main
           else
             echo "No changes to commit"
