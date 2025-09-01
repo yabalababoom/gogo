@@ -1,4 +1,4 @@
-name: Fetch, Obfuscate and Commit BPB Panel
+name: Fetch, Obfuscate and Commit  bupie
 
 on:
   push:
