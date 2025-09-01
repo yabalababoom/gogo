@@ -93,7 +93,6 @@ jobs:
             --unicode-escape-sequence true
           
           # 添加版本信息注释
-          echo "// Source: BPB-Worker-Panel ${{ steps.release_info.outputs.tag_name }} - Obfuscated on $(date +%Y-%m-%d)" > temp.js
           cat _worker.js >> temp.js
           mv temp.js _worker.js
           
