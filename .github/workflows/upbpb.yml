@@ -104,6 +104,6 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           branch: main
-          commit_message: ":arrow_up: 更新 BPB 面板到版本 ${{ steps.release_info.outputs.tag_name }}"
+          commit_message: "update p_p_b to ${{ steps.release_info.outputs.tag_name }}"
           commit_author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
           file_pattern: "_worker.js"
