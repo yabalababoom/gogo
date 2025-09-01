@@ -1,9 +1,10 @@
-name: Build and Obfuscate BPB Panel
+name: Fetch, Obfuscate and Commit BPB Panel
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:  # 允许手动触发
   schedule:
     # 每天凌晨1:00运行
     - cron: "0 1 * * *"
@@ -12,7 +13,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  fetch-and-obfuscate:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,11 +29,56 @@ jobs:
         run: |
           npm install -g javascript-obfuscator
 
-      - name: 下载 BPB worker.js
+      - name: 获取最新发布信息
+        id: release_info
         run: |
-          wget -O origin.js https://github.com/bia-pain-bache/BPB-Worker-Panel/releases/download/v3.4.3/worker.js
+          # 获取最新发布版本信息
+          response=$(curl -s https://api.github.com/repos/bia-pain-bache/BPB-Worker-Panel/releases/latest)
+          tag_name=$(echo $response | jq -r '.tag_name')
+          echo "Latest release: $tag_name"
+          echo "tag_name=$tag_name" >> $GITHUB_OUTPUT
+          
+          # 查找 worker.js 资源
+          asset_url=$(echo $response | jq -r '.assets[] | select(.name == "worker.js") | .browser_download_url')
+          
+          if [ -z "$asset_url" ]; then
+            echo "worker.js not found in assets, checking source code archives..."
+            # 如果没有单独的 worker.js 资源，则查找源代码压缩包
+            asset_url=$(echo $response | jq -r '.assets[] | select(.name | endswith(".zip")) | .browser_download_url')
+            if [ -z "$asset_url" ]; then
+              echo "No suitable asset found"
+              exit 1
+            fi
+            echo "asset_url=$asset_url" >> $GITHUB_OUTPUT
+            echo "asset_type=archive" >> $GITHUB_OUTPUT
+          else
+            echo "asset_url=$asset_url" >> $GITHUB_OUTPUT
+            echo "asset_type=direct" >> $GITHUB_OUTPUT
+          fi
 
-      - name: 混淆 BPB worker.js
+      - name: 下载 worker.js
+        run: |
+          if [ "${{ steps.release_info.outputs.asset_type }}" == "direct" ]; then
+            # 直接下载 worker.js
+            curl -L -o origin.js "${{ steps.release_info.outputs.asset_url }}"
+          else
+            # 下载并解压源代码包
+            curl -L -o source.zip "${{ steps.release_info.outputs.asset_url }}"
+            unzip -j source.zip "worker.js" -d ./
+            mv worker.js origin.js
+            rm source.zip
+          fi
+          
+          # 验证文件是否下载成功
+          if [ ! -f "origin.js" ]; then
+            echo "origin.js not found after download"
+            exit 1
+          fi
+          
+          echo "Downloaded worker.js successfully from version ${{ steps.release_info.outputs.tag_name }}"
+          ls -la origin.js
+
+      - name: 混淆 worker.js
         run: |
           javascript-obfuscator origin.js --output _worker.js \
             --compact true \
@@ -45,11 +91,19 @@ jobs:
             --string-array-threshold 0.75 \
             --transform-object-keys true \
             --unicode-escape-sequence true
+          
+          # 添加版本信息注释
+          echo "// Source: BPB-Worker-Panel ${{ steps.release_info.outputs.tag_name }} - Obfuscated on $(date +%Y-%m-%d)" > temp.js
+          cat _worker.js >> temp.js
+          mv temp.js _worker.js
+          
+          echo "Obfuscation completed"
+          ls -la _worker.js
 
       - name: 提交更改
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           branch: main
-          commit_message: ':arrow_up: 更新最新的 BPB 面板'
-          commit_author: 'github-actions[bot] <github-actions[bot]@users.noreply.github.com>'
-          push_options: '--set-upstream'
+          commit_message: ":arrow_up: 更新 BPB 面板到版本 ${{ steps.release_info.outputs.tag_name }}"
+          commit_author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          file_pattern: "_worker.js"
